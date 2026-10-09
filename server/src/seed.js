@@ -17,8 +17,19 @@ import { StockMovement } from './models/StockMovement.js';
 
 const seedDatabase = async () => {
   try {
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/cloth_pos_db');
-    console.log('[Seed] Connected to MongoDB');
+    
+const mongoUri =
+  process.env.MONGODB_URI?.trim() ||
+  'mongodb://127.0.0.1:27017/cloth_pos_db';
+
+console.log(
+  '[Seed] MongoDB URI source:',
+  process.env.MONGODB_URI ? '.env' : 'fallback'
+);
+
+await mongoose.connect(mongoUri);
+console.log('[Seed] Connected to MongoDB');
+
 
     // Clear existing collections
     await Promise.all([
