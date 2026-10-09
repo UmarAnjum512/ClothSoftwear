@@ -3,6 +3,8 @@ import cors from 'cors';
 import morgan from 'morgan';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import mongoose from 'mongoose';
+import { connectDB } from './config/db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -33,6 +35,33 @@ app.use(cors(allowedOrigins ? { origin: allowedOrigins } : undefined));
 app.use(express.json());
 app.use(morgan('dev'));
 
+// Health check (answers even when the database is down, so it can be used to diagnose)
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'online',
+    appName: 'HOORIYA ARTS POS & Store Management',
+    database: mongoose.connection.readyState === 1 ? 'connected' : 'not connected yet',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Connect to MongoDB on demand (serverless platforms start cold on each deploy).
+// This runs AFTER cors(), so even a database failure is returned with CORS headers
+// and the browser shows the real error instead of a misleading CORS message.
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    console.error('[MongoDB Connection Error]:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Database connection failed. Check MONGODB_URI and Atlas network access.',
+      reason: error.name
+    });
+  }
+});
+
 // Serve uploaded product images as static files
 app.use('/uploads', express.static(path.join(__dirname, '../../uploads')));
 
@@ -51,15 +80,6 @@ app.use('/api/inventory', inventoryRoutes);
 app.use('/api/expenses', expenseRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/settings', settingRoutes);
-
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'online',
-    appName: 'HOORIYA ARTS POS & Store Management',
-    timestamp: new Date().toISOString()
-  });
-});
 
 // 404 handler
 app.use((req, res) => {
