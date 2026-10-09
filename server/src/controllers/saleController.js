@@ -4,6 +4,7 @@ import { ProductVariant } from '../models/ProductVariant.js';
 import { CashRegister } from '../models/CashRegister.js';
 import { adjustVariantStock } from '../services/inventoryService.js';
 import { logAudit } from '../utils/auditLogger.js';
+import { startOfDayKey, endOfDayKey } from '../utils/timezone.js';
 
 // Complete POS Checkout Sale
 export const createSale = async (req, res) => {
@@ -169,12 +170,8 @@ export const getSales = async (req, res) => {
 
     if (startDate || endDate) {
       filter.createdAt = {};
-      if (startDate) filter.createdAt.$gte = new Date(startDate);
-      if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        filter.createdAt.$lte = end;
-      }
+      if (startDate) filter.createdAt.$gte = startOfDayKey(startDate);
+      if (endDate) filter.createdAt.$lte = endOfDayKey(endDate);
     }
 
     const total = await Sale.countDocuments(filter);

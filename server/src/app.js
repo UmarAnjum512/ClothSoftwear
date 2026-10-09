@@ -24,7 +24,12 @@ import settingRoutes from './routes/settingRoutes.js';
 
 const app = express();
 
-app.use(cors());
+// Allow only the deployed frontend when CLIENT_URL is set (comma separated list);
+// otherwise allow any origin (local development).
+const allowedOrigins = process.env.CLIENT_URL
+  ? process.env.CLIENT_URL.split(',').map((o) => o.trim().replace(/\/$/, ''))
+  : null;
+app.use(cors(allowedOrigins ? { origin: allowedOrigins } : undefined));
 app.use(express.json());
 app.use(morgan('dev'));
 

@@ -5,27 +5,20 @@ import { Expense } from '../models/Expense.js';
 import { ProductVariant } from '../models/ProductVariant.js';
 import { Customer } from '../models/Customer.js';
 import { Supplier } from '../models/Supplier.js';
+import {
+  STORE_TZ,
+  toDayKey,
+  startOfDay,
+  endOfDay,
+  startOfDayKey,
+  endOfDayKey,
+  daysAgoStart,
+  monthsAgoStart
+} from '../utils/timezone.js';
 
 // ---------------------------------------------------------------------------
 // Trend helpers (used by the dashboard and the Reports line charts)
 // ---------------------------------------------------------------------------
-
-// Time zone used to bucket sales into calendar days. Defaults to the server's
-// own zone so buckets line up with the "today" boundaries used elsewhere.
-const STORE_TZ =
-  process.env.STORE_TIMEZONE ||
-  Intl.DateTimeFormat().resolvedOptions().timeZone ||
-  'UTC';
-
-const dayKeyFormatter = new Intl.DateTimeFormat('en-CA', {
-  timeZone: STORE_TZ,
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit'
-});
-
-// Date -> 'YYYY-MM-DD' in the store time zone
-const toDayKey = (date) => dayKeyFormatter.format(date);
 
 // Ordered list of bucket keys covering [start, end] (inclusive)
 const buildPeriodKeys = (start, end, groupBy) => {
@@ -128,11 +121,8 @@ const getTrendSeries = async (start, end, groupBy = 'day') => {
 // Dashboard summary
 export const getDashboardSummary = async (req, res) => {
   try {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
+    const todayStart = startOfDay();
+    const todayEnd = endOfDay();
 
     // 1. Today's Sales
     const todaySales = await Sale.aggregate([
@@ -223,9 +213,7 @@ export const getDashboardSummary = async (req, res) => {
       .limit(6);
 
     // 7. Last 7 Days Sales Trend
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
-    sevenDaysAgo.setHours(0, 0, 0, 0);
+    const sevenDaysAgo = daysAgoStart(6);
 
     const salesTrend = await Sale.aggregate([
       {
@@ -245,9 +233,7 @@ export const getDashboardSummary = async (req, res) => {
     ]);
 
     // 8. Top 5 selling products (by quantity sold, last 30 days)
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    thirtyDaysAgo.setHours(0, 0, 0, 0);
+    const thirtyDaysAgo = daysAgoStart(30);
 
     const topProducts = await Sale.aggregate([
       { $match: { status: { $in: ['Completed', 'Partial Returned'] }, createdAt: { $gte: thirtyDaysAgo } } },
@@ -277,9 +263,7 @@ export const getDashboardSummary = async (req, res) => {
     ]);
 
     // 10. Last 30 days performance (sales, gross profit, expenses) for line charts
-    const trendStart = new Date();
-    trendStart.setDate(trendStart.getDate() - 29);
-    trendStart.setHours(0, 0, 0, 0);
+    const trendStart = daysAgoStart(29);
     let dailyTrend = await getTrendSeries(trendStart, todayEnd, 'day');
     // Cost and profit figures are only for owners/managers
     if (!['Super Admin', 'Manager'].includes(req.user?.role)) {
@@ -327,12 +311,8 @@ export const getProfitLossReport = async (req, res) => {
     const filter = { status: { $in: ['Completed', 'Partial Returned'] } };
     const dateMatch = {};
 
-    if (startDate) dateMatch.$gte = new Date(startDate);
-    if (endDate) {
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-      dateMatch.$lte = end;
-    }
+    if (startDate) dateMatch.$gte = startOfDayKey(startDate);
+    if (endDate) dateMatch.$lte = endOfDayKey(endDate);
 
     if (startDate || endDate) filter.createdAt = dateMatch;
 
@@ -391,22 +371,14 @@ export const getTrendReport = async (req, res) => {
   try {
     let groupBy = req.query.groupBy === 'month' ? 'month' : 'day';
 
-    const end = req.query.endDate ? new Date(`${req.query.endDate}T00:00:00`) : new Date();
-    end.setHours(23, 59, 59, 999);
+    const end = req.query.endDate ? endOfDayKey(req.query.endDate) : endOfDay();
 
     let start;
     if (req.query.startDate) {
-      start = new Date(`${req.query.startDate}T00:00:00`);
+      start = startOfDayKey(req.query.startDate);
     } else {
       // No range chosen: last 30 days (daily) or last 12 months (monthly)
-      start = new Date(end);
-      if (groupBy === 'month') {
-        start.setDate(1);
-        start.setMonth(start.getMonth() - 11);
-      } else {
-        start.setDate(start.getDate() - 29);
-      }
-      start.setHours(0, 0, 0, 0);
+      start = groupBy === 'month' ? monthsAgoStart(11) : daysAgoStart(29);
     }
 
     if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) {

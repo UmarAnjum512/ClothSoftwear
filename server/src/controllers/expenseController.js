@@ -1,5 +1,6 @@
 import { Expense } from '../models/Expense.js';
 import { logAudit } from '../utils/auditLogger.js';
+import { startOfDayKey, endOfDayKey } from '../utils/timezone.js';
 
 export const getExpenses = async (req, res) => {
   try {
@@ -8,12 +9,8 @@ export const getExpenses = async (req, res) => {
     if (category) filter.category = category;
     if (startDate || endDate) {
       filter.date = {};
-      if (startDate) filter.date.$gte = new Date(startDate);
-      if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        filter.date.$lte = end;
-      }
+      if (startDate) filter.date.$gte = startOfDayKey(startDate);
+      if (endDate) filter.date.$lte = endOfDayKey(endDate);
     }
 
     const expenses = await Expense.find(filter)
