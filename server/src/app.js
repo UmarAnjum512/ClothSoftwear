@@ -35,14 +35,28 @@ app.use(cors(allowedOrigins ? { origin: allowedOrigins } : undefined));
 app.use(express.json());
 app.use(morgan('dev'));
 
-// Health check (answers even when the database is down, so it can be used to diagnose)
-app.get('/api/health', (req, res) => {
-  res.json({
+// Health check. It also tries the database connection, so opening
+// /api/health in a browser shows immediately whether MongoDB is reachable.
+app.get('/api/health', async (req, res) => {
+  const body = {
     status: 'online',
     appName: 'HOORIYA ARTS POS & Store Management',
-    database: mongoose.connection.readyState === 1 ? 'connected' : 'not connected yet',
     timestamp: new Date().toISOString()
-  });
+  };
+  try {
+    await connectDB();
+    body.database = 'connected';
+  } catch (error) {
+    body.database = 'failed';
+    body.reason = error.name;
+    body.hint =
+      error.name === 'MongooseServerSelectionError'
+        ? 'Cannot reach MongoDB. Check MONGODB_URI and allow 0.0.0.0/0 in Atlas Network Access.'
+        : /auth/i.test(error.message)
+        ? 'MongoDB rejected the username or password in MONGODB_URI.'
+        : 'Check the MONGODB_URI environment variable.';
+  }
+  res.status(body.database === 'connected' ? 200 : 503).json(body);
 });
 
 // Connect to MongoDB on demand (serverless platforms start cold on each deploy).
