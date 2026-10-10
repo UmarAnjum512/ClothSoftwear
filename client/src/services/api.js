@@ -1,5 +1,7 @@
 import axios from 'axios';
 
+// Local development uses the Vite proxy ('/api'). In production set VITE_API_URL
+// to the deployed backend, e.g. https://hooriya-arts-api.vercel.app
 const API_ORIGIN = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 
 const api = axios.create({

@@ -1,5 +1,10 @@
 import dotenv from 'dotenv';
 dotenv.config();
+import dns from 'dns';
+// See server.js: public DNS avoids "querySrv ECONNREFUSED" on some networks.
+if (process.env.PUBLIC_DNS !== 'off') {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+}
 import mongoose from 'mongoose';
 import { Role } from './models/Role.js';
 import { User } from './models/User.js';
